@@ -1,0 +1,154 @@
+%=== Parte 1 ===%
+% Equação diferencial e Resposta ao degrau
+
+clear
+clc
+close all
+
+R1 = 1e3;
+R2 = 2e3;
+C = 100e-6;
+T = 1e-3;
+
+syms y(t)
+Dy = diff(y);
+
+alfa = -R1*C;
+beta  = -R1/R2;
+tau = R2 * C;
+
+y = dsolve(1 == alfa*Dy + beta * y, y(0) == 0);
+
+figure('Name', 'Resposta ao Degrau');
+
+num_per = [5 10 1];
+
+for i = 1:3
+    t1 = 0:T:(num_per(i)*tau);
+    y1 = subs(y, t, t1);
+
+    subplot(3, 1, i);
+    plot(t1, y1);
+    ylabel("tensão de saída (V)");
+    title("Resposta ao Degrau em " + string(num_per(i)) + "\tau");
+    grid;
+end
+
+%=== Parte 2 ===%
+% Resposta ao impulso
+
+t1 = 0:T:5*tau; 
+
+h = diff(y);
+h1 = subs(h, t, t1);
+
+figure('Name','Resposta ao Impulso');
+plot(t1, h1);
+xlabel("tempo (s)");
+ylabel("Resposta impulsiva");
+grid
+
+%=== Parte 3 ===%
+% Resposta a um pulso retangular
+
+figure("Name", "Convolução pelo Pulso Retangular");
+
+function Conv_retangular(Lu, hid, T) 
+    u = ones(1, Lu);
+    s = conv(u, hid) * T;
+    
+    Ls = length(s);
+    time = linspace(0, Ls*T, Ls);
+    
+    hold on;
+    plot(time, [u zeros(1, Ls - Lu)]);
+    plot(time, s);
+    hold off;
+end
+
+
+hid = double(h1);
+
+for i = 1:3
+    subplot(3, 1, i);
+    Conv_retangular(50 * i^2, hid, T);
+end
+
+% Resposta a um pulso senoidal
+
+figure("Name", "Convolução pelo Seno");
+
+function Conv_senoidal(hid, periodo, T) 
+    dur = 10*periodo;
+    [x, tx] = gensig('sin', periodo, dur, T);
+    
+    s1 = conv(x, hid) * T;
+    Ls = length(s1);
+    t1 = linspace(0, Ls*T, Ls);
+    Lmax = 0;
+
+    for i=1:Ls
+        if t1(i) < 12*periodo
+            Lmax = i;
+        end
+    end
+
+    s2 = zeros(1, Lmax);
+    t2 = zeros(1, Lmax);
+
+    for i=1:Lmax
+        s2(i) = s1(i);
+        t2(i) = t1(i);
+    end
+
+    hold on;
+    plot(tx, x);
+    plot(t2, s2);
+    grid;
+    legend('entrada', 'saída');
+    title('Resposta em regime senoidal com periodo ' + string(periodo));
+    hold off;
+end
+
+tau = R2*C;
+peridos = [tau/10, tau, 10*tau];
+
+for i = 1:3
+    subplot(3, 1, i);
+    Conv_senoidal(hid, peridos(i), T);
+end
+
+% Resposta em Frequência
+N = length(hid);
+
+w = logspace(-1, 1, 15)/tau;     
+freq = w/(2*pi);            % Faixa de Frequencia analisada
+
+H_w = zeros(1, 15);
+
+% Transformada de fourier
+for k = 1:15
+    exp_term = exp(-1j*2*pi*freq(k)*T*(1:N));
+
+    H_w(k) = hid * (exp_term.') * T;
+end
+
+figure("Name", "Resposta em frequência");
+subplot(2, 1, 1);
+semilogx(w, 20*log10(abs(H_w)));
+legend('$\frac{Y(\omega)}{X(\omega)}$', 'Interpreter', 'latex')
+ylabel("Magnitude (dB)");
+
+subplot(2, 1, 2);
+semilogx(w, angle(H_w)*180/pi);
+ylabel("Fase (deg)");
+xlabel("Frequência (rad/s)");
+
+
+figure("Name", "bode");
+
+a = 1;
+b = [-R1*C -R1/R2];
+
+H = tf(a, b);
+bode(H)
